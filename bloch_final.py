@@ -106,12 +106,18 @@ def fmt_complex(z, nd=3):
     return f"{a}{sign}{abs(b)}i"
 
 def redraw_scene(v_initial=None, v_current=None, show_trail=True):
+    global arrow_initial, arrow_current, trail_line, info_text
     """Clear and redraw everything."""
     ax.clear()
     setup_axes()
     plot_bloch_sphere(ax)
 
-    global arrow_initial, arrow_current, trail_line
+        # Re-create info panel each redraw (ax.clear() removes it)
+    info_text = ax.text2D(
+        0.02, 0.98, "", transform=ax.transAxes,
+        va="top", ha="left"
+    )
+
 
     if v_initial is not None:
         arrow_initial = ax.quiver(0, 0, 0, v_initial[0], v_initial[1], v_initial[2],
@@ -150,15 +156,14 @@ def redraw_scene(v_initial=None, v_current=None, show_trail=True):
     ax.text(1.05, 0, 0, "Initial", color="red")
     ax.text(1.05, 0, 0.1, "Current", color="blue")
 
-
-# initial draw (no trail, just one arrow as "current")
-v_now = np.array(bloch_coords(psi), dtype=float)
-redraw_scene(v_initial=v_now, v_current=v_now, show_trail=False)
-
 info_text = ax.text2D(
     0.02, 0.98, "", transform=ax.transAxes,
     va="top", ha="left"
 )
+
+# initial draw (no trail, just one arrow as "current")
+v_now = np.array(bloch_coords(psi), dtype=float)
+redraw_scene(v_initial=v_now, v_current=v_now, show_trail=False)
 
 
 # -------------------------
