@@ -62,6 +62,10 @@ psi = None              # current qubit state
 target_psi = None       # after gate
 animating = False
 
+gate_queue = []          # list of (name, matrix)
+queued_text = None       # text showing queued gates
+play_requested = False
+
 frames = 51
 trail = []
 
@@ -118,6 +122,13 @@ def redraw_scene(v_initial=None, v_current=None, show_trail=True):
         va="top", ha="left"
     )
 
+        # Queue display (top-right)
+    global queued_text
+    queued_text = ax.text2D(
+        0.98, 0.98, "", transform=ax.transAxes,
+        va="top", ha="right"
+    )
+
 
     if v_initial is not None:
         arrow_initial = ax.quiver(0, 0, 0, v_initial[0], v_initial[1], v_initial[2],
@@ -151,6 +162,11 @@ def redraw_scene(v_initial=None, v_current=None, show_trail=True):
             f"y = {y:.3f}\n"
             f"z = {z:.3f}\n"
         )
+
+
+    # Update queue display
+    qnames = [name for (name, _) in gate_queue]
+    queued_text.set_text("Queue: " + (" → ".join(qnames) if qnames else "(empty)"))
 
     # small labels
     ax.text(1.05, 0, 0, "Initial", color="red")
@@ -206,11 +222,17 @@ ax_btnY = plt.axes([0.27, 0.05, btn_w, btn_h])
 ax_btnZ = plt.axes([0.39, 0.05, btn_w, btn_h])
 ax_btnH = plt.axes([0.51, 0.05, btn_w, btn_h])
 
+ax_btnPlay  = plt.axes([0.63, 0.05, btn_w, btn_h])
+ax_btnClear = plt.axes([0.75, 0.05, btn_w, btn_h])
+
+
 bX = Button(ax_btnX, "X")
 bY = Button(ax_btnY, "Y")
 bZ = Button(ax_btnZ, "Z")
 bH = Button(ax_btnH, "H")
 
+bPlay = Button(ax_btnPlay, "Play")
+bClear = Button(ax_btnClear, "Clear")
 
 def start_gate_animation(gate):
     global psi, target_psi, animating, trail, anim_axis, anim_angle_total
@@ -230,15 +252,33 @@ def start_gate_animation(gate):
     animating = True
 
 
-def on_click_X(_): start_gate_animation(X)
-def on_click_Y(_): start_gate_animation(Y)
-def on_click_Z(_): start_gate_animation(Z)
-def on_click_H(_): start_gate_animation(H)
+def enqueue_gate(name, gate):
+    gate_queue.append((name, gate))
+    fig.canvas.draw_idle()
+
+def on_click_X(_): enqueue_gate("X", X)
+def on_click_Y(_): enqueue_gate("Y", Y)
+def on_click_Z(_): enqueue_gate("Z", Z)
+def on_click_H(_): enqueue_gate("H", H)
+
 
 bX.on_clicked(on_click_X)
 bY.on_clicked(on_click_Y)
 bZ.on_clicked(on_click_Z)
 bH.on_clicked(on_click_H)
+
+def on_click_Play(_):
+    global play_requested
+    play_requested = True
+
+def on_click_Clear(_):
+    global gate_queue, play_requested
+    gate_queue = []
+    play_requested = False
+    fig.canvas.draw_idle()
+
+bPlay.on_clicked(on_click_Play)
+bClear.on_clicked(on_click_Clear)
 
 
 # -------------------------
@@ -250,9 +290,15 @@ def update(frame):
     v0 = np.array(bloch_coords(psi), dtype=float)
 
     if not animating:
-        # idle: just show current state as both initial/current
+        # If Play was pressed, and there are gates queued, start next one
+        global play_requested
+        if play_requested and gate_queue:
+            name, gate = gate_queue.pop(0)
+            start_gate_animation(gate)
+            # redraw will happen next frames as animation runs
         redraw_scene(v_initial=v0, v_current=v0, show_trail=False)
         return
+
 
     # during animation: rotate current Bloch vector by fraction of the gate rotation
     t = frame / (frames - 1)
@@ -266,7 +312,12 @@ def update(frame):
     if frame == frames - 1:
         psi = target_psi
         animating = False
+        if not gate_queue:
+            play_requested = False
+
+        
 
 
 ani = FuncAnimation(fig, update, frames=frames, interval=30, blit=False)
 plt.show()
+
