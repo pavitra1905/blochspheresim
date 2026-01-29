@@ -69,6 +69,8 @@ play_requested = False
 frames = 51
 trail = []
 
+history = []   # stack of previous psi states for Revert
+
 # animation parameters
 anim_axis = np.array([1.0, 0.0, 0.0])
 anim_angle_total = 0.0
@@ -80,7 +82,7 @@ anim_angle_total = 0.0
 fig = plt.figure(figsize=(8, 8))
 ax = fig.add_subplot(111, projection="3d")
 
-plt.subplots_adjust(bottom=0.28)  # room for UI
+plt.subplots_adjust(bottom=0.35)  # room for UI
 
 def setup_axes():
     ax.set_box_aspect([1, 1, 1])
@@ -185,11 +187,16 @@ redraw_scene(v_initial=v_now, v_current=v_now, show_trail=False)
 # -------------------------
 # Sliders
 # -------------------------
-ax_theta = plt.axes([0.15, 0.18, 0.7, 0.03])
-ax_phi   = plt.axes([0.15, 0.13, 0.7, 0.03])
+ax_theta = plt.axes([0.15, 0.26, 0.7, 0.03])
+ax_phi   = plt.axes([0.15, 0.21, 0.7, 0.03])
+ax_speed = plt.axes([0.15, 0.16, 0.7, 0.03])
+
 
 theta_slider = Slider(ax_theta, r"$\theta$", 0.0, np.pi, valinit=theta0)
 phi_slider   = Slider(ax_phi, r"$\phi$", 0.0, 2*np.pi, valinit=phi0)
+# Speed slider: interval in milliseconds per frame (smaller = faster)
+speed_slider = Slider(ax_speed, "Speed", 5, 200, valinit=30, valstep=1)
+
 
 
 def on_slider(_):
@@ -213,6 +220,7 @@ theta_slider.on_changed(on_slider)
 phi_slider.on_changed(on_slider)
 
 
+
 # -------------------------
 # Buttons
 # -------------------------
@@ -224,6 +232,9 @@ ax_btnH = plt.axes([0.51, 0.05, btn_w, btn_h])
 
 ax_btnPlay  = plt.axes([0.63, 0.05, btn_w, btn_h])
 ax_btnClear = plt.axes([0.75, 0.05, btn_w, btn_h])
+
+ax_btnRevert = plt.axes([0.87, 0.05, btn_w, btn_h])
+bRevert = Button(ax_btnRevert, "Revert")
 
 
 bX = Button(ax_btnX, "X")
@@ -239,6 +250,8 @@ def start_gate_animation(gate):
 
     if animating:
         return
+
+    history.append(psi.copy())
 
     # current and target states (statevector)
     target_psi = apply_gate(psi, gate)
@@ -276,6 +289,23 @@ def on_click_Clear(_):
     gate_queue = []
     play_requested = False
     fig.canvas.draw_idle()
+
+def on_click_Revert(_):
+    global psi, history, animating, trail, gate_queue, play_requested
+    if animating:
+        return  # don’t undo mid-animation
+
+    if not history:
+        return
+
+    psi = history.pop()
+    trail = []
+    gate_queue = []
+    play_requested = False
+    fig.canvas.draw_idle()
+
+bRevert.on_clicked(on_click_Revert)
+
 
 bPlay.on_clicked(on_click_Play)
 bClear.on_clicked(on_click_Clear)
@@ -318,6 +348,13 @@ def update(frame):
         
 
 
-ani = FuncAnimation(fig, update, frames=frames, interval=30, blit=False)
+ani = FuncAnimation(fig, update, frames=frames, interval=int(speed_slider.val), blit=False)
+
+def on_speed_change(val):
+    # Matplotlib stores the timer in ani.event_source
+    ani.event_source.interval = int(speed_slider.val)
+
+speed_slider.on_changed(on_speed_change)
+
 plt.show()
 
